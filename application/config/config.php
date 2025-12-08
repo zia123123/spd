@@ -14,7 +14,7 @@
 | path to your installation.
 |
 */
-$config['base_url']	= 'http://10.10.10.88/spdjabar';
+$config['base_url']	= 'https://spd.bulogjabar.id/';
 
 /*
 |--------------------------------------------------------------------------
