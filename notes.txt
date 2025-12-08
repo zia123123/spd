@@ -1,0 +1,56 @@
+- skpd pesawat max 2 hari
+- rekap tagihan berdasarkan fax pusat
+- export excel
+- benerin validasi
+- benerin tampilan table sppd dan skpd (ui)
+- nominatif pegawai
+
+
+DONE =================================
+- tempat
+- $upesawat + $utravel + $ukereta
+- an kabid pp
+- edit skpd
+- rekap dan nota verik a4
+- menu akomodasi hotel
+- Dasar SKPD Jateng (otomatis)
+- dasar fax 
+- validasi pegawai yg msh dinas
+- benerin perhitungan biaya
+- show tiket travel/kereta di jenis biaya selain pesawat
+- menu pejabat ttd
+- menu setting (perliter, dll)
+=======================================
+
+SELECT
+	id_pelaksana,no_fax, tgl_fax, no_skpd, attr_skpd, nama_pelaksana, gol, tmpt_tujuan, durasi_tgs,
+	uang_hotel, uang_pesawat_b, uang_kereta_b, uang_travel_b,
+	uang_taxi, uang_harian, uang_repres,	
+  jumlah, pph, potongan,
+	uang_pesawat_p, uang_kereta_p, uang_travel_p,
+	total, jumlah_diterima
+FROM
+	tb_pelaksana a
+INNER JOIN tb_skpd b
+INNER JOIN tb_sppd c ON a.id_sppd = c.id_sppd
+WHERE
+	no_fax != ''
+group by id_pelaksana
+
+
+
+darat_hotel 		OK
+darat_non_hotel		OK
+monev_ada		OK
+monev_kualitas		OK
+monev_raskin		OK
+verik_raskin		OK
+dalam_kota		OK
+spi			OK
+urepres			OK
+pswt_krywn_hotel	OK
+pswt_krywn_non_hotel	OK
+pswt_ka_waka_hotel	OK
+pswt_ka_waka_non_hotel	OK
+travel			OK
+kereta-api		OK

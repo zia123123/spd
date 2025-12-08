@@ -1,0 +1,500 @@
+<style>
+.center {
+	text-align:center;
+}
+.table {
+	font-size:8pt;
+	table-layout: fixed;
+	collapse:collapse;
+	white-space: nowrap;
+}
+.table th {
+	background-color:#1A60AF;
+	
+}
+.table .thead {
+	color:#fff;
+	vertical-align:middle;	
+	font-size:10pt;
+	font-weight:bold;
+	border-bottom:solid 2px #183B63;
+}
+.table .tdskpd {
+	font-size:10pt;
+	border-bottom:solid 1px #BFBFBF;
+	vertical-align:middle;	
+}
+.form-control{
+	font-size:10pt;
+	height:35px;	
+}
+#map_canvas {
+  width:100%;
+  height:500px;
+}
+.form-control select{
+	line-height:50px;
+	width:20px;
+}
+</style>
+
+<div class="col-sm-12">
+	
+		<br/>
+		<?php
+			foreach ($pelaksana as $r)
+			{
+				$jenisbiaya = $r->jenis_biaya;
+				$moda_angkutan = $r->moda_angkutan;
+			}
+			if ($this->uri->segment(4) != ""){
+				$message = str_replace("_"," ",$this->uri->segment(4));
+				echo "<label class='text-danger' style='font-size:10pt'>".$message."</label>";
+			}
+		?>
+		<form action="<?php echo site_url('request_skpd/approve');?>" class="form-horizontal" method="post">
+		<?php echo "<input type='hidden' name='id_sppd' value='$id'>"; ?>
+		
+		<div class="col-sm-12">
+			<div class="panel panel-default">
+					<div class="panel-heading">
+							<h3 class="panel-title"><b>Konfirmasi #2</b></h3>
+							
+							<div class="panel-options">
+							</div>
+						</div>
+					<div class="form-group" style="overflow-x: scroll;">
+					<table class="table" style="" cellspacing="0" >
+							
+								<tr>
+									<th class="thead center" style=""width="35px">No</th>
+									<th class="thead" width="150px">Nama Pelaksana</th>
+									<th class="thead center" width="100px">Ket</th>
+									<th class="thead center" width="50px">Gol</th>
+									<th class="thead center" width="135px">Harian</th>
+									<th class="thead center" width="135px">Repres</th>
+									<?php if ($jenisbiaya == "darat_hotel" or $jenisbiaya == "spi" or $jenisbiaya == "pswt_krywn_hotel" or $jenisbiaya == "pswt_ka_waka_hotel"){ ?>
+									<th class="thead center" width="135px">Hotel</th>
+									<?php } ?>
+									<?php if ($moda_angkutan == "pesawat udara"){ ?>
+									<th class="thead center" width="135px">Taxi</th>
+									<th class="thead center" width="270px" colspan="2">Tiket Pesawat (PP)</th>
+									<?php } elseif ($moda_angkutan == "kereta api"){ ?>
+									<th class="thead center" width="135px">Taxi</th>
+									<th class="thead center" width="270px" colspan="2">Tiket Kereta Api (PP)</th>
+									<?php } elseif ($moda_angkutan == "travel"){ ?>
+									<th class="thead center" width="135px">Taxi</th>
+									<th class="thead center" width="270px" colspan="2">Travel (PP)</th>
+									<?php } elseif ($moda_angkutan == "Pesawat/Kereta/Travel"){ ?>
+									<th class="thead" width="135px">Taxi</th>
+									<th class="thead center" width="270px" colspan="2">Tiket Pesawat (PP)</th>
+									<th class="thead center" width="270px" colspan="2">Tiket Kereta Api (PP)</th>
+									<th class="thead center" width="270px" colspan="2">Travel (PP)</th>
+									<?php } ?>
+									<th class="thead center" width="100px">PPH (%)</th>
+								</tr>
+							
+							
+							<tbody>
+								<?php
+									$i=1;
+									foreach ($pelaksana as $r)
+									{
+								?>
+								<input type="hidden" name="jenis_biaya" value="<?php echo $r->jenis_biaya;?>"/>
+								<input type="hidden" name="moda_angkutan" value="<?php echo $r->moda_angkutan;?>"/>
+								<tr>
+									<td class="tdskpd">
+										<?php echo $i;?>
+										<?php echo "<input type='hidden' name='id_pelaksana[]' value='$r->id_pelaksana'>"; ?>
+									</td>
+									<td class="tdskpd"><?php echo $r->nama_pelaksana;?></td>
+									<td class="tdskpd">
+										<select name="penanda[]" class="form-control">
+											<option value="">-</option>
+											<option value="*)">*)</option>
+										</select>
+									</td>
+									<?php if (substr($r->noreg,0,4) == '1111' or substr($r->noreg,0,4) == '2222') { ?>
+									<td class="tdskpd" align="center">-</td>
+									<?php } else { ?>
+									<td class="tdskpd" align="center"><?php echo romawi($r->gol);?></td>
+									<?php } ?>
+									<td class="tdskpd">
+										<input type="text" name="uang_harian[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_harian;?>" class="form-control"/>
+									</td>
+									<td class="tdskpd"><input type="text" name="uang_repres[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_repres;?>" class="form-control"/></td>
+									<?php if ($jenisbiaya == "darat_hotel" or $jenisbiaya == "spi" or $jenisbiaya == "pswt_krywn_hotel" or $jenisbiaya == "pswt_ka_waka_hotel"){ ?>
+									<td class="tdskpd"><input type="text" name="uang_hotel[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_hotel;?>" class="form-control"/></td>
+									<?php } ?>
+									<?php if ($moda_angkutan == "pesawat udara"){ ?>
+									<td class="tdskpd"><input type="text" name="uang_taxi[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_taxi;?>" class="form-control"/></td>
+									<td class="tdskpd"><input type="text" name="upesawat_b[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_pesawat_b;?>" class="form-control" placeholder="Lumpsum (Rp.)"/></td>
+									<td class="tdskpd"><input type="text" name="upesawat_p[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_pesawat_p;?>" class="form-control" placeholder="Perusahaan"/></td>
+									<?php } elseif ($moda_angkutan == "kereta api"){ ?>
+									<td class="tdskpd"><input type="text" name="uang_taxi[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_taxi;?>" class="form-control"/></td>
+									<td class="tdskpd"><input type="text" name="ukereta_b[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_kereta_b;?>" class="form-control" placeholder="Lumpsum (Rp.)"/></td>
+									<td class="tdskpd"><input type="text" name="ukereta_p[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_kereta_p;?>" class="form-control" placeholder="Perusahaan"/></td>
+									<?php } elseif ($moda_angkutan == "travel"){ ?>
+									<td class="tdskpd"><input type="text" name="uang_taxi[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_taxi;?>" class="form-control"/></td>
+									<td class="tdskpd"><input type="text" name="utravel_b[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_travel_b;?>" class="form-control" placeholder="Lumpsum (Rp.)"/></td>
+									<td class="tdskpd"><input type="text" name="utravel_p[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_travel_p;?>" class="form-control" placeholder="Perusahaan"/></td>
+									<?php } elseif ($moda_angkutan == "Pesawat/Kereta/Travel"){ ?>
+									<td class="tdskpd"><input type="text" name="uang_taxi[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_taxi;?>" class="form-control"/></td>
+									<td class="tdskpd"><input type="text" name="upesawat_b[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_pesawat_b;?>" class="form-control" placeholder="Lumpsum (Rp.)"/></td>
+									<td class="tdskpd"><input type="text" name="upesawat_p[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_pesawat_p;?>" class="form-control" placeholder="Perusahaan"/></td>
+									<td class="tdskpd"><input type="text" name="ukereta_b[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_kereta_b;?>" class="form-control" placeholder="Lumpsum (Rp.)"/></td>
+									<td class="tdskpd"><input type="text" name="ukereta_p[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_kereta_p;?>" class="form-control" placeholder="Perusahaan"/></td>
+									<td class="tdskpd"><input type="text" name="utravel_b[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_travel_b;?>" class="form-control" placeholder="Lumpsum (Rp.)"/></td>
+									<td class="tdskpd"><input type="text" name="utravel_p[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->uang_travel_p;?>" class="form-control" placeholder="Perusahaan"/></td>
+									<?php } ?>
+									<td class="tdskpd"><input type="text" name="pph[]" data-mask="fdecimal" data-dec="," data-rad="." value="<?php echo $r->pph;?>" class="form-control"/></td>
+								</tr>
+								<?php $i++;}?>
+							</tbody>
+						</table>
+					</div>
+			</div>
+		</div>
+		<div class="col-sm-12">
+			<div class="col-sm-3">	
+			<div class="xe-widget xe-todo-list">
+			<div class="xe-header">
+				<div class="xe-icon" style="width:25px;">
+					<i class="fa fa-dot-circle-o" style="text-align:center;"></i>
+				</div>
+				<div class="xe-label">
+					<span>Asal</span>
+					<strong><?php echo ucwords(strtolower($data_sppd['tmpt_keberangkatan'])); ?></strong>
+				</div>
+			</div>
+			<div class="xe-header">
+				<div class="xe-icon" style="width:25px">
+					<i class="fa-map-marker" style="text-align:center;"></i>
+				</div>
+				<div class="xe-label">
+					<span>Tujuan</span>
+					<strong><?php echo ucwords(strtolower($data_sppd['tmpt_tujuan'])); ?></strong>
+				</div>
+			</div>
+			<div class="xe-header">
+				<div class="xe-icon" style="width:25px">
+					<i class="fa-suitcase" style="text-align:center;"></i>
+				</div>
+				<div class="xe-label">
+					<span>Tugas</span>
+					<strong><?php echo $data_sppd['tugas']; ?></strong>
+				</div>
+			</div>
+			<div class="xe-header">
+				<div class="xe-icon" style="width:25px">
+					<i class="fa-road" style="text-align:center;"></i>
+				</div>
+				<div class="xe-label">
+					<span>Durasi</span>
+					<strong><?php echo $data_sppd['durasi_tgs']; ?> Hari</strong>
+					<input type="hidden" name="durasi" value="<?php echo $data_sppd['durasi_tgs']; ?>"/>	
+				</div>
+			</div>
+			<div class="xe-header">
+				<div class="xe-icon" style="width:25px">
+					<i class="fa-money" style="text-align:center;"></i>
+				</div>
+				<div class="xe-label">
+					<span>Jenis Biaya</span>
+					<strong><?php echo strtoupper($jenisbiaya); ?></strong>
+				</div>
+			</div>
+			<div class="xe-body">
+			</div>
+			</div>
+			</div>
+			<div class="col-sm-9">	
+			<div class="panel panel-default">
+					<?php
+					$tgl_sppd= date("Y-m-d", strtotime($data_sppd['tgl_sppd']));
+					$tgl_sppd_indo = tgl_indo($tgl_sppd);
+					?>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Dasar SKPD</label>
+						<div class="input-group col-sm-8">
+							<textarea name="dasar" class="form-control" style="min-width:450px; min-height:40px;">Berdasarkan persetujuan <?php echo $data_sppd['jab_pemberi_tgs'];?> pada SPPD <?php echo $data_sppd['jab_pemohon_tgs'].' tanggal '.$tgl_sppd_indo;?> dengan ini diterbitkan SKPD atas nama :</textarea>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Perlengkapan</label>
+						<div class="input-group col-sm-4">
+							<input type="text" name="perlengkapan" value="Membawa Perlengkapan Seperlunya" class="form-control" style=""/>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Nomor SKPD</label>
+						<div class="input-group col-sm-4">
+							<input type="text" name="no_skpd" class="form-control" value="<?php echo $no_skpd; ?>"/>
+							<input type="hidden" name="no_skpd_old" value="<?php echo $no_skpd; ?>"/>
+						</div>
+					</div>
+					<?php if ($moda_angkutan == "kendaraan dinas"){ ?>
+					<!--
+					<div class="form-group">
+						<label class="col-sm-2 control-label">BBM (Rp)</label>
+						<div class="input-group col-sm-4">
+							<input type="text" id="bbm_rp" name="bbm_rp" class="form-control" />
+						</div>
+					</div>
+					
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Jenis BBM</label>
+						<div class="input-group col-sm-4">
+							<select name="jenis_bbm" class="form-control">
+								<option value="">- Pilih Jenis BBM -</option>
+								<?php foreach ($bbm as $jenisbbm) { ?>
+									<option value="<?php echo $jenisbbm->jenis_bbm; ?>"><?php echo strtoupper($jenisbbm->jenis_bbm)." / Rp. ". $jenisbbm->perliter; ?></option>
+								<?php } ?>
+							</select>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Jumlah Jarak</label>
+						<div class="input-group col-sm-4">
+							<input type="text" id="jumlah_km" name="jumlah_km" value="0" class="form-control"  style="width:150px;" readonly />&nbsp;&nbsp;
+							<button type="button" class="btn btn-success" style="" id="hitungjarak" data-toggle="modal" data-target="#myMapModal">Hitung Jarak &nbsp;<i class="fa fa-map-marker"></i></button>
+						</div>
+					</div>
+					-->
+					<?php } ?>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Keterangan di Rekap Biaya</label>
+						<div class="input-group col-sm-4">
+							<textarea name="ket_lain" class="form-control" style="min-width:450px; min-height:40px;"><?php echo $data_sppd['ket'];?></textarea>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Keterangan di SKPD</label>
+						<div class="input-group col-sm-4">
+							<textarea name="ket_lain_skpd" class="form-control" style="min-width:450px; min-height:40px;"><?php echo $ket_lain_skpd;?></textarea>
+						</div>
+					</div>
+					<div class="form-group">
+						<label class="col-sm-2 control-label">Tanggal SKPD</label>
+						<div class="input-group col-sm-4">
+							<input type="text" name="tgl_skpd" class="form-control datepicker" value="<?php echo $tgl_skpd; ?>" data-format="dd-mm-yyyy" required>
+						</div>
+					</div>
+					
+					<div class="form-group">
+						<label class="col-sm-2 control-label">&nbsp;</label>
+						<div class="input-group col-sm-4">
+							<input type="submit" name="submit" class="btn btn-blue" onclick="return confirm('Anda yakin akan menyetujui SKPD?')" value="Disetujui"/>
+							<?php echo anchor($this->uri->segment(1),'Kembali',array('class'=>'btn btn-white'));?>
+						</div>
+					</div>
+			</div>
+			</div>
+		</div>
+</div>
+
+<div class="modal fade" align="center" id="myMapModal" >
+							
+<div class="modal-content" align="center" style="width:95%;">
+	
+	<div class="modal-body">
+	<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+		<div id="map_canvas" class=""></div>
+		<p>
+		<table align="left" border="0" width="100%">
+		<tr>
+			<td width="125px" height="30px"> Lokasi Tujuan </td>
+			<td width="25px">:</td>
+			<td colspan="2">
+				<b>
+					<?php echo strtoupper(strtolower($data_sppd['tmpt_tujuan'])); ?>
+				</b>
+			</td>
+		</tr>
+		<tr>
+			<td width="125px"> Jumlah Jarak (Km) </td>
+			<td width="25px">:</td>
+			<td width="180px">
+				<input type="text" name="total" style="width:150px;" data-mask="decimal" class="form-control" value="" id="total" />
+			</td>
+			<td class="tdskpd">
+				<button type="button" onclick="showInput();" data-dismiss="modal" class="btn btn-success" id="hitungjarak"><i class="fa fa-save"></i> &nbsp;Simpan Jarak </button>  &nbsp;&nbsp;&nbsp;&nbsp;
+			</td>
+		</tr>
+		</table>
+		<br/><br/><br/>
+			
+		</p> 
+	</div>
+</div>
+
+</div>
+<script type="text/javascript">
+function showInput() {
+    var message_entered =  document.getElementById("total").value;
+    document.getElementById('jumlah_km').value = message_entered;
+}
+
+</script>
+<script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false"></script>
+<script type="text/javascript">
+var infowindow = null;
+var map;      
+var directionsDisplay;  
+var directionsService = new google.maps.DirectionsService();
+var oldDirections = [];
+var currentDirections = null;
+
+var myCenter=new google.maps.LatLng(-6.9935097814125085,110.41833758354187);
+var marker=new google.maps.Marker({
+    position:myCenter
+});
+
+function initialize() {
+	
+	var sites = [
+		<?php
+			foreach($data_tempat as $tmpt){
+				?>
+				["<?php echo $tmpt->nama_tempat;?>", <?php echo $tmpt->latlng ?> ,1, "<h4><?php echo $tmpt->nama_tempat;?></h4><p><?php echo $tmpt->wilayah;?></p>"],
+				<?php
+			}
+		?>
+	];
+	var mapProp = {
+	  center:myCenter,
+	  zoom: 9,
+	  scrollwheel: true,
+	  mapTypeId:google.maps.MapTypeId.ROADMAP
+	};
+  
+  map=new google.maps.Map(document.getElementById("map_canvas"),mapProp);
+  marker.setMap(map);
+   
+  directionsDisplay = new google.maps.DirectionsRenderer({
+		'map': map,
+		'preserveViewport': true,
+		'draggable': true
+	});
+	
+  google.maps.event.addListener(directionsDisplay, 'directions_changed',
+  function() {
+	if (currentDirections) {
+	  oldDirections.push(currentDirections);
+	}
+	//currentDirections = directionsDisplay.getDirections();
+	computeTotalDistance(directionsDisplay.getDirections());
+  });
+  //google.maps.event.addListener(marker, 'click', function() {
+   setMarkers(map, sites); // memanggil fungsi setMarker untuk menandai titik di peta.
+   //setAction(map);
+   infowindow = new google.maps.InfoWindow({
+				content: "loading..."
+			});
+  //  infowindow.setContent(contentString);
+  //  infowindow.open(map, sites);
+     calcRoute();  
+	 
+  //}); 
+};
+
+function calcRoute() {
+		
+	var start = new google.maps.LatLng(-6.9935097814125085,110.41833758354187);
+	var end = new google.maps.LatLng(-7.153446665654537,110.0810394063592);
+	var request = {
+		origin:start,
+		destination:end,
+		travelMode: google.maps.TravelMode.DRIVING,
+		avoidHighways: false,
+		avoidTolls: false
+	};
+	directionsService.route(request, function(response, status) {
+		if (status == google.maps.DirectionsStatus.OK) {
+			directionsDisplay.setDirections(response);
+			distanceInput.value = response.routes[0].legs[0].distance.value / 1000; 
+		}
+	});
+	
+}
+
+function computeTotalDistance(result) {
+		var total = 0;
+		var myroute = result.routes[0];
+		for (var i = 0; i < myroute.legs.length; i++) {
+			total += myroute.legs[i].distance.value;
+		}
+		total = total / 1000;
+		document.getElementById('total').value = Math.round(total);
+	}
+	function setMarkers(map, markers) {
+		//berikut merupakan perulangan untuk membaca masing masing titik yang telah kita definisikan di sites[];
+		for (var i = 0; i < markers.length; i++) {
+			var sites = markers[i];
+			var siteLatLng = new google.maps.LatLng(sites[1], sites[2]);
+			var image= '<?php echo base_url()?>xenon/images/bulog_small.png';
+			var marker = new google.maps.Marker({
+				position: siteLatLng,
+				map: map,
+				title: sites[0],
+				zIndex: sites[3],
+				html: sites[4],
+				icon:image
+			});
+
+			var contentString = "Some content";
+			// berikut merupakan fungsi untuk mengatur agar keterangan marker muncuk ketika mouse diarahkan ke marker (mouse over)
+			google.maps.event.addListener(marker, "mouseover", function () {
+			   
+				infowindow.setContent(this.html);
+				infowindow.open(map, this);
+			});
+		}
+	}
+	function setAction(map){		
+		google.maps.event.addListener(map, "rightclick", function(event) {
+
+		if(confirm("Tandai Titik Ini? (klik pada tanda yang muncul untuk melihat pilihan)")){
+			var lat = event.latLng.lat();
+			var lng = event.latLng.lng();
+			var form = '<h4>Tambah Data</h4><form id="formtambahdata" method="post" action=""><br><input type="text" id="nama" placeholder="nama tempat" name="nama"><br><textarea id="keterangan" name="keterangan" placeholder="Isi Keterangan tempat"></textarea><br><input type="text" id="latlng" name="latlng" value="'+lat+','+lng+'"><br><input type="submit" value="Simpan"></form>';
+			
+			var siteLatLng = new google.maps.LatLng(lat, lng);
+			var marker = new google.maps.Marker({
+					position: siteLatLng,
+					map: map,
+					title: "add data",
+					zIndex: 100,
+					html: form
+
+				});
+			google.maps.event.addListener(marker, "mouseover", function () {				   
+				infowindow.setContent(this.html);
+				infowindow.open(map, this);
+			});
+		}
+	   
+		});
+	}
+google.maps.event.addDomListener(window, 'load', initialize);
+
+google.maps.event.addDomListener(window, "resize", resizingMap());
+
+$('#myMapModal').on('show.bs.modal', function() {
+   //Must wait until the render of the modal appear, thats why we use the resizeMap and NOT resizingMap!! ;-)
+   resizeMap();
+})
+
+function resizeMap() {
+   if(typeof map =="undefined") return;
+   setTimeout( function(){resizingMap();} , 400);
+}
+
+function resizingMap() {
+   if(typeof map =="undefined") return;
+   var center = map.getCenter();
+   google.maps.event.trigger(map, "resize");
+   map.setCenter(center); 
+}
+</script>

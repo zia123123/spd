@@ -1,0 +1,378 @@
+<?php
+class sppd extends CI_Controller{
+    
+    var $folder =   "sppd";
+    var $tables =   "tb_sppd";
+    var $pk     =   "id_sppd";
+    var $title  =   "SPPD";
+    
+    function __construct() {
+        parent::__construct();
+		$this->load->helper("terbilang");
+		$this->load->helper("tanggal");
+	    $this->load->helper("romawi");    
+		$this->load->library('pdf');
+		$this->load->helper('pdf_helper');
+		$this->load->library('form_validation');
+    }
+    
+    function index()
+    {
+		
+		
+        //$query="SELECT * FROM tb_sppd ORDER BY id_sppd desc";
+		$query = "select *,
+				  GROUP_CONCAT(b.nama_pelaksana) as nama_pelaksana
+				  from tb_sppd a 
+				  INNER JOIN tb_pelaksana b on a.id_sppd = b.id_sppd
+				  GROUP BY a.id_sppd
+				  ORDER BY a.id_sppd DESC";
+        $data['record']=  $this->db->query($query)->result();
+        $data['title']  = $this->title;
+        $data['desc']    =   "";
+		$this->template->load('template', $this->folder.'/view',$data);
+    }
+	
+    function post()
+    {
+        if(isset($_POST['submit']))
+        {
+			$this->form_validation->set_message('required', '%s Harus Diisi.');
+			$this->form_validation->set_rules('dasar', 'Dasar SPPD','trim|required');
+			$this->form_validation->set_rules('ketua_plk', 'Ketua Pelaksana','trim|required');
+			$this->form_validation->set_rules('tgl_tugas', 'Tanggal Tugas','trim|required');
+			$this->form_validation->set_rules('tmpt_tujuan', 'Tempat Tujuan','trim|required');
+			$this->form_validation->set_rules('tugas', 'Tugas','trim|required');
+			$this->form_validation->set_rules('no_fax', '','');
+			$this->form_validation->set_rules('tgl_fax', '','');
+			$this->form_validation->set_rules('ket', '','');
+			$this->form_validation->set_rules('tgl_sppd', 'Tanggal SPPD','trim|required');
+			
+			date_default_timezone_set("Asia/Bangkok");
+			$time_now 		 = date("d-m-Y");
+			
+			$date_awal 		 = trim(substr($this->input->post('tgl_tugas'),0,10));
+			$date_akhir 	 = trim(substr($this->input->post('tgl_tugas'),-10));
+			$selisih 		 = abs(strtotime($date_akhir) - strtotime($date_awal))/(60*60*24)+1; 
+			
+			$ketua_plk_tugas = $this->input->post('ketua_plk');
+			$plk_tugas 		 = $this->input->post('plk_tgs');
+			
+			$tmpt_brgkt 	 = $this->input->post('tmpt_keberangkatan');
+			$tmpt_tujuan 	 = $this->input->post('tmpt_tujuan');
+			
+			if ($this->form_validation->run() === FALSE) {
+				$data['pegawai'] = $this->mcrud->manualquery("select * from tb_pegawai order by nama_pegawai asc")->result();
+				$data['lokasi'] = $this->mcrud->manualquery("select * from tb_tempat")->result();
+				$this->template->load('template', $this->folder.'/post',$data);
+			} else {
+				// CEK MASIH DINAS ATAU BELUM (KETUA PELAKSANA)
+				$cek_dinas_ketua = $this->db->query("select a.nama_pelaksana, b.tgl_keberangkatan,b.tgl_kepulangan from tb_pelaksana a inner join tb_sppd b on a.id_sppd = b.id_sppd where a.noreg = '$ketua_plk_tugas'");
+				if($cek_dinas_ketua->num_rows()>0){
+				
+					foreach($cek_dinas_ketua->result() as $r){
+						$tglbrgkt = $r->tgl_keberangkatan;
+						$tglplg = $r->tgl_kepulangan;
+						$nama = $r->nama_pelaksana;
+					}
+				} else {
+					$tglbrgkt = "00-00-0000";
+					$tglplg = "00-00-0000";
+					$nama = "";
+				}
+				
+				$tgl_a = date('d-m-Y', strtotime($tglbrgkt));
+				$tgl_b = date('d-m-Y', strtotime($tglplg));
+				
+				if (($date_awal >= $tgl_a) && ($date_awal <= $tgl_b))
+				{
+					echo '<script type="text/javascript">alert("Input SPPD Gagal ! '.$nama.' masih dalam masa dinas !");window.history.go(-1);</script>';
+				}
+				elseif (($date_akhir >= $tgl_a) && ($date_akhir <= $tgl_b))
+				{
+					echo '<script type="text/javascript">alert("Input SPPD Gagal ! '.$nama.' masih dalam masa dinas !");window.history.go(-1);</script>';
+				}
+				else
+				{
+					// CEK MASIH DINAS ATAU BELUM (PELAKSANA)
+					foreach ($plk_tugas as $noreg){
+						$cek_dinas_plk = $this->db->query("select a.nama_pelaksana, b.tgl_keberangkatan,b.tgl_kepulangan from tb_pelaksana a inner join tb_sppd b on a.id_sppd = b.id_sppd where a.noreg = '$noreg'")->result();
+						foreach($cek_dinas_plk as $attr){
+							$tglbrgkt =  date('d-m-Y', strtotime($attr->tgl_keberangkatan));
+							$tglplg =  date('d-m-Y', strtotime($attr->tgl_kepulangan));
+							
+							if (($date_awal >= $tglbrgkt) && ($date_awal <= $tglplg))
+							{
+								echo '<script type="text/javascript">alert("Input SPPD Gagal ! '.$attr->nama_pelaksana.' masih dalam masa dinas !");window.history.go(-1);</script>';
+								exit;
+							}
+						
+						}
+					}
+					
+					foreach ($plk_tugas as $noreg){
+						$data=array(
+							'pemberi_tgs'=> $this->input->post('pemberi_tgs'),
+							'jab_pemberi_tgs'=> $this->input->post('jab_pemberi_tgs'),
+							'pemohon_tgs'=>$this->input->post('pemohon_tgs'),
+							'jab_pemohon_tgs'=> $this->input->post('jab_pemohon_tgs'),
+							'durasi_tgs'=>$selisih, 
+							'tmpt_keberangkatan'=>$this->input->post('tmpt_keberangkatan'),
+							'tgl_keberangkatan'=>$date_awal, 
+							'tmpt_tujuan'=>$tmpt_tujuan,
+							'tgl_kepulangan'=>$date_akhir, 
+							'tugas'=>$this->input->post('tugas'),
+							'ket'=>$this->input->post('ket'),
+							'sts'=>'0',
+							'tgl_sppd'=>$this->input->post('tgl_sppd'),
+							'dasar_sppd'=>$this->input->post('dasar'),
+							'no_fax'=>$this->input->post('no_fax'),
+							'tgl_fax'=>$this->input->post('tgl_fax'),
+						);
+						
+						$insertsppd = $this->db->insert($this->tables,$data);
+					
+						if ($this->db->affected_rows($insertsppd) == 1) {
+							$last_id_sppd = $this->db->query("select max(id_sppd) as id_sppd from tb_sppd")->row()->id_sppd;
+							$get_attr_kta_plk = $this->db->query("select * from tb_pegawai where noreg='$ketua_plk_tugas'")->result();
+							foreach($get_attr_kta_plk as $attr){
+								$this->mcrud->manualQuery('INSERT INTO tb_pelaksana (noreg, nama_pelaksana, gol, jabatan, unit_kerja, id_sppd, status_pelaksana) values ("'.$ketua_plk_tugas.'","'.$attr->nama_pegawai.'","'.$attr->golongan.'","'.$attr->jabatan.'","'.$attr->unitkerja.'","'.$last_id_sppd.'","1")');
+							}
+							
+							foreach ($plk_tugas as $noreg){
+								$get_attr_plk_tgs = $this->db->query("select * from tb_pegawai where noreg='$noreg'")->result();
+								foreach($get_attr_plk_tgs as $attr){
+									$this->mcrud->manualQuery('INSERT INTO tb_pelaksana (noreg, nama_pelaksana, gol, jabatan, unit_kerja, id_sppd, status_pelaksana) values ("'.$noreg.'","'.$attr->nama_pegawai.'","'.$attr->golongan.'","'.$attr->jabatan.'","'.$attr->unitkerja.'","'.$last_id_sppd.'","0")');
+								}
+							}
+							
+							redirect($this->uri->segment(1));
+						}
+						else {
+							redirect("login");
+						}
+					}
+				}
+			}
+        }
+        else
+        {
+            $data['title']  = $this->title;
+            $data['desc']    =   "";
+			$data['pegawai'] = $this->mcrud->manualquery("select * from tb_pegawai order by nama_pegawai asc")->result();
+			$data['lokasi'] = $this->mcrud->manualquery("select * from tb_tempat")->result();
+            $this->template->load('template', $this->folder.'/post',$data);
+        }
+    }
+    
+    
+    function edit()
+    {
+        if(isset($_POST['submit']))
+        {
+            $id     	=   $this->input->post('id_sppd');
+            $date_awal 	= 	trim(substr($this->input->post('tgl_tugas'),0,10));
+			$date_akhir = 	trim(substr($this->input->post('tgl_tugas'),-10));
+			$selisih 	= 	abs(strtotime($date_akhir) - strtotime($date_awal))/(60*60*24)+1;
+
+			$ketua_plk_tugas = $this->input->post('ketua_plk');
+			$plk_tugas 		 = $this->input->post('plk_tgs');
+			
+			$tmpt_brgkt 	 = $this->input->post('tmpt_keberangkatan');
+			$tmpt_tujuan 	 = $this->input->post('tmpt_tujuan');
+			
+			// CEK MASIH DINAS ATAU BELUM (KETUA PELAKSANA)
+			/*
+			$cek_dinas_ketua = $this->db->query("select a.nama_pelaksana, b.tgl_keberangkatan,b.tgl_kepulangan from tb_pelaksana a inner join tb_sppd b on a.id_sppd = b.id_sppd where a.noreg = '$ketua_plk_tugas'");
+			if($cek_dinas_ketua->num_rows()>0){
+			
+				foreach($cek_dinas_ketua->result() as $r){
+					$tglbrgkt = $r->tgl_keberangkatan;
+					$tglplg = $r->tgl_kepulangan;
+					$nama = $r->nama_pelaksana;
+				}
+			} else {
+				$tglbrgkt = "00-00-0000";
+				$tglplg = "00-00-0000";
+				$nama = "";
+			}
+			
+			$tgl_a = date('d-m-Y', strtotime($tglbrgkt));
+			$tgl_b = date('d-m-Y', strtotime($tglplg));
+			
+			if (($date_awal >= $tgl_a) && ($date_awal <= $tgl_b))
+			{
+				echo '<script type="text/javascript">alert("Input SPPD Gagal ! '.$nama.' masih dalam masa dinas !");window.history.go(-1);</script>';
+			}
+			else
+			{
+				// CEK MASIH DINAS ATAU BELUM (PELAKSANA)
+				foreach ($plk_tugas as $noreg){
+					$cek_dinas_plk = $this->db->query("select a.nama_pelaksana, b.tgl_keberangkatan,b.tgl_kepulangan from tb_pelaksana a inner join tb_sppd b on a.id_sppd = b.id_sppd where a.noreg = '$noreg'")->result();
+					foreach($cek_dinas_plk as $attr){
+						$tglbrgkt =  date('d-m-Y', strtotime($attr->tgl_keberangkatan));
+						$tglplg =  date('d-m-Y', strtotime($attr->tgl_kepulangan));
+						if (($date_awal >= $tglbrgkt) && ($date_awal <= $tglplg))
+						{
+							echo '<script type="text/javascript">alert("Edit SPPD Gagal ! '.$attr->nama_pelaksana.' masih dalam masa dinas !");window.history.go(-1);</script>';
+							exit;
+						}
+					}
+				}
+			*/
+				foreach ($plk_tugas as $noreg){
+					$data   =   array(  'pemberi_tgs'=>$this->input->post('pemberi_tgs'),
+										'jab_pemberi_tgs'=>$this->input->post('jab_pemberi_tgs'),
+										'pemohon_tgs'=>$this->input->post('pemohon_tgs'),
+										'jab_pemohon_tgs'=>$this->input->post('jab_pemohon_tgs'),
+										'durasi_tgs'=>$selisih, 
+										'tmpt_keberangkatan'=>$this->input->post('tmpt_keberangkatan'),
+										'tgl_keberangkatan'=>$date_awal, 
+										'tmpt_tujuan'=>$tmpt_tujuan,
+										'tgl_kepulangan'=>$date_akhir,
+										'tugas'=>$this->input->post('tugas'),
+										'sts'=>'0',
+										'dasar_sppd'=>$this->input->post('dasar'),
+										'no_fax'=>$this->input->post('no_fax'),
+										'tgl_fax'=>$this->input->post('tgl_fax'),
+										'tgl_sppd'=>$this->input->post('tgl_sppd'),
+										'ket'=>$this->input->post('ket'));
+										
+					$updatesppd = $this->mcrud->update($this->tables,$data, $this->pk,$id);
+					
+					$this->mcrud->manualquery('DELETE FROM tb_pelaksana WHERE id_sppd ="'.$id.'"');
+					
+					$get_attr_kta_plk = $this->db->query("select * from tb_pegawai where noreg='$ketua_plk_tugas'")->result();
+					foreach($get_attr_kta_plk as $attr){
+						$this->mcrud->manualQuery('INSERT INTO tb_pelaksana (noreg, nama_pelaksana, gol, jabatan, unit_kerja, id_sppd, status_pelaksana) values 
+												 ("'.$ketua_plk_tugas.'","'.$attr->nama_pegawai.'","'.$attr->golongan.'","'.$attr->jabatan.'","'.$attr->unitkerja.'","'.$id.'","1")');
+					}
+					
+					foreach ($plk_tugas as $noreg){
+						$get_attr_plk_tgs = $this->db->query("select * from tb_pegawai where noreg='$noreg'")->result();
+						foreach($get_attr_plk_tgs as $attr){
+							$this->mcrud->manualQuery('INSERT INTO tb_pelaksana (noreg, nama_pelaksana, gol, jabatan, unit_kerja, id_sppd, status_pelaksana) values 
+													 ("'.$noreg.'","'.$attr->nama_pegawai.'","'.$attr->golongan.'","'.$attr->jabatan.'","'.$attr->unitkerja.'","'.$id.'","0")');
+						}
+					}
+					
+					$chekid =  $this->db->get_where('tb_skpd',array($this->pk=>$id));
+					if($chekid->num_rows()>0) {
+						$update_sts	 = $this->mcrud->manualquery('update tb_sppd set sts = "1", sts_edit = "1" WHERE id_sppd ="'.$id.'"');
+						redirect($this->uri->segment(1));
+						/*
+						$data['id']			 = $id;
+						$data['data_sppd']	 = $this->mcrud->manualquery('select * from tb_sppd WHERE id_sppd ="'.$id.'"')->row_array();
+						$data['data_tempat'] = $this->mcrud->manualquery('select * from tb_tempat')->result();
+						$data['bbm'] 		 = $this->mcrud->manualquery('select * from tb_bahanbakar')->result();
+						$data['pelaksana']	 = $this->mcrud->manualquery('select id_pelaksana, nama_pelaksana, noreg, gol, jabatan, unit_kerja, status_pelaksana
+											   from tb_pelaksana 
+											   where id_sppd = "'.$id.'"
+											   ORDER BY status_pelaksana DESC')->result();
+						
+						
+						$data['ketua_plk']	 = $this->mcrud->getDataKetuaPelaksanaSppd($id);
+						$data['plk_tgs']	 = $this->mcrud->getDataPelaksanaSppd($id);
+						$data['lokasi']		 = $this->mcrud->getDataLokasi($id);
+						$this->template->load('template', 'request_skpd/confirm_1',$data);
+						*/
+						
+					} else {
+						$update_sts	 = $this->mcrud->manualquery('update tb_sppd set sts = "0" WHERE id_sppd ="'.$id.'"');
+						redirect($this->uri->segment(1));
+					}				
+				}
+			//}
+        }
+        else
+        {
+            $data['title']  = $this->title;
+            $data['desc']   = "";
+            $id          	= $this->uri->segment(3);
+            $data['r']   	= $this->mcrud->getByID($this->tables,  $this->pk,$id)->row_array();
+			$q   			=  "select * from tb_pegawai order by nama_pegawai asc";
+			$y   			=  "select a.id_sppd, 
+									GROUP_CONCAT(a.id_pelaksana) as id_pelaksana,
+									GROUP_CONCAT(b.nama_pegawai) as nama_pegawai, 
+									GROUP_CONCAT(a.noreg) as noreg, 
+									GROUP_CONCAT(a.gol) as golongan, 
+									GROUP_CONCAT(a.jabatan) as jabatan, 
+									a.unit_kerja, a.status_pelaksana
+								from tb_pelaksana a 
+								INNER JOIN tb_pegawai b on a.noreg = b.noreg
+								where a.id_sppd = '$id' and a.status_pelaksana = 0
+								GROUP BY a.id_sppd";
+			$a   			=  "select * from tb_tempat";
+			$b   			=  "select tempat_awal, group_concat(id_lokasi) as id_lokasi, group_concat(tempat_tujuan) as tempat_tujuan,
+								id_sppd from tb_lokasi where id_sppd = '$id' group by id_sppd";
+			$data['pegawai'] = $this->db->query($q)->result();
+			$data['lokasi_all'] = $this->db->query("select * from tb_tempat")->result();
+			$data['plk_selected'] = $this->db->query("select * from tb_pelaksana where id_sppd = '".$id."' and status_pelaksana=0")->result();
+			$data['lokasi_selected'] = $this->db->query("select * from tb_lokasi where id_sppd = '".$id."'")->result();
+			$data['pelaksana'] = $this->db->query($y)->row_array();
+			$data['ketua_plk']	= $this->mcrud->manualquery('select * from tb_pelaksana WHERE id_sppd ="'.$id.'" and status_pelaksana=1')->row_array();
+			$data['plk_tgs']	= $this->mcrud->manualquery('select * from tb_pelaksana WHERE id_sppd ="'.$id.'" and status_pelaksana=0')->row_array();
+			
+			$data['tempat'] = $this->db->query($a)->result();
+			$data['lokasi'] = $this->db->query($b)->row_array();
+            $this->template->load('template', $this->folder.'/edit',$data);
+        }
+    }
+    
+    function delete()
+    {
+        $id     =  $this->uri->segment(3);
+        $chekid =  $this->db->get_where($this->tables,array($this->pk=>$id));
+        if($chekid->num_rows()>0)
+        {
+            $this->mcrud->delete($this->tables,  $this->pk,  $this->uri->segment(3));
+			$this->mcrud->manualquery('DELETE FROM tb_pelaksana WHERE id_sppd ="'.$id.'"');
+			$this->mcrud->manualquery('DELETE FROM tb_lokasi WHERE id_sppd ="'.$id.'"');
+        }
+		else {
+			$this->mcrud->manualquery('DELETE FROM tb_pelaksana WHERE id_sppd ="'.$id.'"');
+		}
+        redirect($this->uri->segment(1));
+    }
+	
+	function tampilkan_jab1()
+    {
+        $nama_pegawai  =   $_GET['nama_pegawai'];
+        $data   = 	$this->db->get_where('tb_pegawai',array('nama_pegawai'=>$nama_pegawai))->result();
+        foreach ($data as $r)
+        {
+            //echo "<option value='$r->jabatan'>".  $r->jabatan."</option>";
+			echo $r->jabatan;
+        }
+    }
+	
+	function lihat_pelaksana()
+    {
+		$data['title']  = $this->title;
+		$data['desc']   = "";
+		$id             = $this->uri->segment(3);
+		$query			=  "select 
+							id_pelaksana, nama_pelaksana, noreg, gol, jabatan, unit_kerja, status_pelaksana
+							from tb_pelaksana 
+							where id_sppd = '$id'
+							ORDER BY status_pelaksana DESC";
+		$data['record'] = $this->db->query($query)->result();
+		$this->template->load('template', $this->folder.'/lihat_pelaksana',$data);
+    }
+	
+	function cetak_sppd(){
+		
+		$id['id_sppd'] = $this->uri->segment(3);
+		$tglsppd = $this->uri->segment(4);
+		$filename = "SPPD_".$id['id_sppd']."_".$tglsppd;
+		
+		$data = array(
+			'get_data_sppd'=>$this->mcrud->manualquery('select * from tb_sppd WHERE id_sppd ="'.$id['id_sppd'].'"')->result(),
+			'get_ketua_pelaksana_sppd'=>$this->mcrud->getDataKetuaPelaksanaSppd($id['id_sppd']),
+			'get_pelaksana_sppd'=>$this->mcrud->getDataPelaksanaSppd($id['id_sppd']),
+		);
+
+		$this->load->view($this->folder.'/cetak_sppd',$data);
+	}
+	
+}

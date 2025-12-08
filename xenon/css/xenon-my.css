@@ -1,0 +1,42 @@
+label {
+	color:#000;
+}
+.text-danger  {
+margin:10px 0px 10px;
+font-size:8pt;
+font-style:italic;
+}
+.table #th {
+	border-top:solid 2px #777675;
+	background-color:#FFF;
+}
+.table tr #th {
+	border-bottom:solid 0px #777675;
+	font-size:10pt;
+	padding:4px;
+	text-align:left;
+	color:#00000;
+}
+.table .td {
+	border-bottom:solid 1px #777675;
+	border-top:solid 1px #777675;
+	color:#000000;
+	font-size:10pt;
+	padding:5px;
+}
+.table .td_right {
+	border-bottom:solid 1px #777675;
+	color:#000000;
+	font-size:10pt;
+	padding:5px;
+	text-align:right;
+}
+.control-label {
+	color:#000000;
+}
+.panel-default {
+	margin-top:-30px;
+}
+.panel .panel-heading {
+	border-bottom:dashed 1px #C1C1C1;
+}

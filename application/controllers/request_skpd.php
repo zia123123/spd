@@ -1,0 +1,538 @@
+<?php
+class request_skpd extends CI_Controller{
+    
+    var $folder =   "request_skpd";
+    var $tables =   "tb_sppd";
+    var $pk     =   "id_sppd";
+    var $title  =   "Permintaan SKPD";
+    
+    function __construct() {
+        parent::__construct();
+		$this->load->helper("terbilang");
+		$this->load->library('pdf');
+		$this->load->helper('pdf_helper');
+		$this->load->helper("romawi");
+    }
+    
+    function index()
+    {
+        //$query				= "SELECT * FROM tb_sppd where sts= 0 ORDER BY tgl_sppd desc";
+		$query = "select *,
+				  GROUP_CONCAT(b.nama_pelaksana) as nama_pelaksana
+				  from tb_sppd a 
+				  INNER JOIN tb_pelaksana b on a.id_sppd = b.id_sppd
+				  WHERE sts = 0
+				  GROUP BY a.id_sppd
+				  ORDER BY a.id_sppd DESC";
+        $data['record']		= $this->db->query($query)->result();
+        $data['title'] 		= $this->title;
+        $data['desc']    	= "";
+		$this->template->load('template', $this->folder.'/view',$data);
+    }
+	
+	function confirm_1()
+    {
+		$data['title']  	 = $this->title;
+		$data['desc']   	 = "";
+		$id          		 = $this->uri->segment(3);
+		$data['id']			 = $this->uri->segment(3);
+		$data['data_sppd']	 = $this->mcrud->manualquery('select * from tb_sppd WHERE id_sppd ="'.$id.'"')->row_array();
+		//$data['data_tempat'] = $this->mcrud->manualquery('select * from tb_tempat')->result();
+		$data['bbm'] 		 = $this->mcrud->manualquery('select * from tb_bahanbakar')->result();
+		$data['pelaksana']	 = $this->mcrud->manualquery('select id_pelaksana, nama_pelaksana, noreg, gol, jabatan, unit_kerja, status_pelaksana
+							   from tb_pelaksana 
+							   where id_sppd = "'.$id.'"
+							   ORDER BY status_pelaksana DESC')->result();
+		
+		
+		$data['ketua_plk']	 = $this->mcrud->getDataKetuaPelaksanaSppd($id);
+		$data['plk_tgs']	 = $this->mcrud->getDataPelaksanaSppd($id);
+		//$data['lokasi']		 = $this->mcrud->getDataLokasi($id);
+								
+		$this->template->load('template', $this->folder.'/confirm_1',$data);
+    }
+	
+	function input_pelaksana_temp()
+    {
+		date_default_timezone_set("Asia/Bangkok");
+		$data['title']   = $this->title;
+		$data['desc']    = "";
+		
+		$time_now 		 = date("d-m-Y");
+		$bln	 		 = date("m");
+		$thn	 		 = date("Y");
+		
+		$attr_skpd		 = " / 10040 / RT.03 / ".$bln." / ".$thn;
+		$id          	 = $this->input->post('id_sppd');
+		$durasi        	 = $this->input->post('durasi');
+		$jenis_biaya	 = $this->input->post('jenis_biaya');
+		$moda_angkutan	 = $this->input->post('moda_angkutan');
+		
+		if ($jenis_biaya == ""){			
+			$this->session->set_flashdata('msg', 'Jenis Biaya belum dipilih.');
+			redirect('request_skpd/confirm_1/'.$id);
+		} elseif ($moda_angkutan == "") { 
+			$this->session->set_flashdata('msg', 'Moda Angkutan belum dipilih.');
+			redirect('request_skpd/confirm_1/'.$id);
+		} elseif (substr($jenis_biaya,0,4) == "pswt" and $moda_angkutan == "kendaraan dinas") { 
+			$this->session->set_flashdata('msg', 'Jenis Biaya dan Moda Angkutan tidak cocok.');
+			redirect('request_skpd/confirm_1/'.$id);
+		} else {
+			$this->mcrud->manualQuery('DELETE FROM tb_pelaksana_temp');
+		}
+			// AMBIL DATA PELAKSANA ==================================================================================================
+			$get_pelaksana_skpd = $this->db->query("select a.id_pelaksana, a.noreg, a.nama_pelaksana, a.gol, a. jabatan, a.unit_kerja, a.status_pelaksana, 
+													a.id_sppd, a.uang_bbm, a.uang_tol,
+													b.pajak, 
+													c.dalam_kota, c.raskin, c.management_reg, c.management_diklat, c.spi, c.u_hotel, c.u_taxi
+													from tb_pelaksana a inner join tb_pegawai b
+													on a.noreg = b.noreg inner join tb_golongan c
+													on c.jenjang = b.jenjang
+													where a.id_sppd = '$id'")->result();
+			// ======================================================================================================================= 
+			
+			foreach($get_pelaksana_skpd as $row){
+				
+				// UANG REPRES =======================================================================================================
+				if ($row->jabatan=="Pemimpin" or $row->jabatan=="Pemimpin Wilayah" or $row->jabatan=="Wakil Pemimpin" or $row->jabatan=="Wakil Pemimpin Wilayah" or $row->jabatan=="Ka SPI Reg VI" or $row->jabatan=="Kepala Auditor Internal Wilayah V Bandung"){
+					if ($jenis_biaya=="pswt_krywn_hotel" or $jenis_biaya=="pswt_krywn_non_hotel" or $jenis_biaya=="pswt_ka_waka_hotel" or $jenis_biaya=="pswt_ka_waka_non_hotel"){
+						if ($durasi >= 2) {
+							$durasi = 2;
+						} else {
+							$durasi = $this->input->post('durasi');
+						}
+					} else {
+						$durasi = $this->input->post('durasi');
+					}
+					$uang_repres = $this->db->query("select u_repres from tb_repres")->row()->u_repres*$durasi;
+				} else {
+					$uang_repres = 0;
+				}
+				// ===================================================================================================================
+				
+				// JENIS BIAYA =======================================================================================================
+				if($jenis_biaya=="darat_hotel"){				
+					$harian			= $row->management_reg;
+					$uang_hotel 	= $row->u_hotel*($durasi-1);
+					$uang_taxi 		= 0;
+					
+				} elseif ($jenis_biaya=="darat_non_hotel" or $jenis_biaya=="monev_ada" or $jenis_biaya=="monev_kualitas"){
+					$harian 		= $row->management_reg;
+					$uang_hotel 	= 0;	
+					$uang_taxi 		= 0;
+					
+				} elseif ($jenis_biaya=="monev_raskin" or $jenis_biaya=="verik_raskin"){
+					$harian 		= $row->raskin;
+					$uang_hotel 	= 0;
+					$uang_taxi 		= 0;
+					
+				} elseif ($jenis_biaya=="dalam_kota"){
+					$harian 		= $row->dalam_kota;
+					$uang_hotel 	= 0;
+					$uang_taxi 		= 0;
+					
+				} elseif ($jenis_biaya=="spi"){
+					$harian 		= $row->spi;
+					$uang_hotel 	= 0;
+					$uang_taxi 		= 0;
+					
+				} elseif ($jenis_biaya=="pswt_krywn_hotel"){
+					$harian 		= $row->management_diklat;
+					if ($durasi >= 2) {
+						$durasi = 2;
+					} else {
+						$durasi = $this->input->post('durasi');
+					}
+					$uang_hotel 	= $row->u_hotel*($durasi-1);
+					$uang_taxi 		= $row->u_taxi;
+					
+				} elseif ($jenis_biaya=="pswt_krywn_non_hotel"){
+					if ($durasi >= 2) {
+						$durasi = 2;
+					} else {
+						$durasi = $this->input->post('durasi');
+					}
+					$harian 		= $row->management_diklat;
+					$uang_hotel 	= 0;
+					$uang_taxi 		= $row->u_taxi;
+					
+				} elseif ($jenis_biaya=="pswt_ka_waka_hotel"){
+					$harian 		= $row->management_diklat;
+					if ($durasi >= 2) {
+						$durasi = 2;
+					} else {
+						$durasi = $this->input->post('durasi');
+					}
+					$uang_hotel 	= $row->u_hotel*($durasi-1);
+					$uang_taxi 		= $row->u_taxi;
+					
+				} elseif ($jenis_biaya=="pswt_ka_waka_non_hotel"){
+					if ($durasi >= 2) {
+						$durasi = 2;
+					} else {
+						$durasi = $this->input->post('durasi');
+					}
+					$harian 		= $row->management_diklat;
+					$uang_hotel 	= 0;
+					$uang_taxi 		= $row->u_taxi;
+					
+				} else {
+					$harian 		= $row->raskin;
+					$uang_hotel 	= 0;
+					$uang_taxi 		= 0;
+					
+				}
+				// ===================================================================================================================
+				$upesawat_b = 0;
+				$upesawat_p = 0;
+				$ukereta_b = 0;
+				$utravel_b = 0;
+				// PERHITUNGAN UANG HARIAN, PAJAK, JUMLAH, JUMLAH DITERIMA ===========================================================
+				$id_pelaksana 		= $row->id_pelaksana;
+				$pph 				= $row->pajak;
+				
+				if ($jenis_biaya=="pswt_krywn_hotel" or $jenis_biaya=="pswt_krywn_non_hotel" or $jenis_biaya=="pswt_ka_waka_hotel" or $jenis_biaya=="pswt_ka_waka_non_hotel"){
+					if ($durasi >= 2) {
+						$durasi = 2;
+					} else {
+						$durasi = $this->input->post('durasi');
+					}
+					$uangharian 		= $harian*$durasi;
+				} else {
+					$uangharian 		= $harian*$durasi;
+				}
+				$jumlah 			= $uangharian+$uang_hotel+$uang_repres+$uang_taxi+$upesawat_b+$ukereta_b+$utravel_b;
+				
+				$pajak 				= ($jumlah*$pph)/100;
+				
+				if ($jenis_biaya=="pswt_krywn_hotel" or $jenis_biaya=="pswt_krywn_non_hotel" or $jenis_biaya=="pswt_ka_waka_hotel" or $jenis_biaya=="pswt_ka_waka_non_hotel"){
+					$total_pesawat 	= $jumlah + $upesawat_p;
+					$jmlhditerima 	= $jumlah - $pajak + $upesawat_p;
+				} else {
+					$total_pesawat 	= 0;
+					$jmlhditerima 	= $jumlah - $pajak ;
+				}
+				$jenis_biaya	 = $this->input->post('jenis_biaya');
+				$moda_angkutan	 = $this->input->post('moda_angkutan');
+				// ===================================================================================================================
+				// INPUT TABLE PELAKSANA TEMP ============================================================================================
+				$this->mcrud->manualQuery('INSERT INTO tb_pelaksana_temp (
+									   id_pelaksana, noreg, nama_pelaksana, gol, jabatan, unit_kerja, status_pelaksana, id_sppd,
+									   uang_harian, uang_bbm, uang_tol, uang_repres, uang_hotel, uang_taxi, uang_pesawat_b, uang_pesawat_p,
+									   uang_kereta_b, uang_kereta_p, uang_travel_b, uang_travel_p,
+									   jenis_biaya, moda_angkutan, pph) 
+									   values (
+									   "'.$id_pelaksana.'","'.$row->noreg.'","'.$row->nama_pelaksana.'","'.$row->gol.'","'.$row->jabatan.'","'.$row->unit_kerja.'",
+									   "'.$row->status_pelaksana.'","'.$id.'",
+									   "'.$uangharian.'","'.$row->uang_bbm.'","'.$row->uang_tol.'","'.$uang_repres.'","'.$uang_hotel.'","'.$uang_taxi.'","0","0","0","0","0","0","'.$jenis_biaya.'","'.$moda_angkutan.'", "'.$pph.'")');
+				// ===================================================================================================================
+				
+			}
+			redirect('request_skpd/confirm_2/'.$id);
+		
+    }
+	
+	function confirm_2()
+    {
+		$data['title']  	 = $this->title;
+		$thn	 		 	 = date("Y");
+		$id          		 = $this->uri->segment(3);
+		$data['id']			 = $this->uri->segment(3);
+		$data['data_sppd']	 = $this->mcrud->manualquery('select * from tb_sppd WHERE id_sppd ="'.$id.'"')->row_array();
+		$data['data_tempat'] = $this->mcrud->manualquery('select * from tb_tempat')->result();
+		$data['bbm'] 		 = $this->mcrud->manualquery('select * from tb_bahanbakar')->result();
+		$data['pelaksana']	 = $this->mcrud->manualquery('select id_pelaksana, nama_pelaksana, noreg, gol, jabatan, unit_kerja, status_pelaksana,
+							   uang_harian, uang_bbm, uang_tol, uang_repres, uang_hotel, uang_taxi, uang_pesawat_b, uang_pesawat_p,
+							   uang_kereta_b, uang_kereta_p, uang_travel_b, uang_travel_p, pph, jenis_biaya, moda_angkutan
+							   from tb_pelaksana_temp 
+							   where id_sppd = "'.$id.'"
+							   ORDER BY status_pelaksana DESC')->result();
+		
+		
+		
+		$data['ketua_plk']	 = $this->mcrud->getDataKetuaPelaksanaSppd($id);
+		$data['plk_tgs']	 = $this->mcrud->getDataPelaksanaSppd($id);
+		
+		// AMBIL DATA NOMOR SKPD =================================================================================================
+		$checknomor =  $this->db->get_where('tb_skpd',array($this->pk=>$id));
+		if($checknomor->num_rows()>0){
+			$data['no_skpd'] =  $this->db->get_where('tb_skpd',array($this->pk=>$id))->row()->no_skpd;
+			$data['tgl_skpd'] =  $this->db->get_where('tb_skpd',array($this->pk=>$id))->row()->tgl_skpd;
+			$data['ket_lain_skpd'] =  $this->db->get_where('tb_skpd',array($this->pk=>$id))->row()->ket_lain_skpd;
+		} 
+		else 
+		{
+			$last_no_skpd 	 = $this->db->query("select max(no_skpd) as no_skpd from tb_skpd where right(tgl_skpd,4) = '$thn' ")->row()->no_skpd;
+			
+			if($last_no_skpd == NULL or $last_no_skpd == 0) {
+				$data['no_skpd'] = 1;
+			} else {
+				$data['no_skpd'] = $last_no_skpd + 1;
+			}
+			
+			$data['tgl_skpd'] = date("d-m-Y");
+			$data['ket_lain_skpd'] = "";
+		}
+		// =======================================================================================================================
+			$this->template->load('template', $this->folder.'/confirm_2',$data);
+		
+		
+    }
+    
+    function approve()
+    {
+		date_default_timezone_set("Asia/Bangkok");
+		$data['title']   = $this->title;
+		$data['desc']    = "";
+		
+		$time_now 		 = $this->input->post('tgl_skpd');
+		$year 			 = substr($time_now, 6,4);
+		$month			 = substr($time_now, 3,2);
+		
+		$bln	 		 = date("m");
+		$thn	 		 = date("Y");
+		$attr_skpd		 = " / 10040 / RT.03 / ".$month." / ".$year;
+		
+		$id          	 = $this->input->post('id_sppd');
+		$nomorskpd     	 = $this->input->post('no_skpd');
+		$nomorskpd_old	 = $this->input->post('no_skpd_old');
+		$dasar         	 = $this->input->post('dasar');
+		$durasi        	 = $this->input->post('durasi');
+		$perlengkapan	 = $this->input->post('perlengkapan');
+		$ket_lain		 = $this->input->post('ket_lain');
+		$ket_lain_skpd	 = $this->input->post('ket_lain_skpd');
+		$moda_angkutan	 = $this->input->post('moda_angkutan');
+		$jenis_biaya	 = $this->input->post('jenis_biaya');
+		$jenis_bbm		 = $this->input->post('jenis_bbm');
+		$bbm_rp		 	 = $this->input->post('bbm_rp');
+		$tol_rp		 	 = $this->input->post('tol_rp');
+		
+		$id_pelaksana	 = $this->input->post('id_pelaksana');
+		
+		$uang_harian	 = str_replace(',','',$this->input->post('uang_harian'));
+		$uang_repres	 = str_replace(',','',$this->input->post('uang_repres'));
+		$uang_bbm	 	 = str_replace(',','',$this->input->post('uang_bbm'));
+		$uang_tol	 	 = str_replace(',','',$this->input->post('uang_tol'));
+		$uang_hotel	 	 = str_replace(',','',$this->input->post('uang_hotel'));
+		$uang_taxi	 	 = str_replace(',','',$this->input->post('uang_taxi'));
+		$upesawat_b	 	 = str_replace(',','',$this->input->post('upesawat_b'));
+		$upesawat_p	 	 = str_replace(',','',$this->input->post('upesawat_p'));
+		$ukereta_b	 	 = str_replace(',','',$this->input->post('ukereta_b'));
+		$ukereta_p	 	 = str_replace(',','',$this->input->post('ukereta_p'));
+		$utravel_b	 	 = str_replace(',','',$this->input->post('utravel_b'));
+		$utravel_p	 	 = str_replace(',','',$this->input->post('utravel_p'));
+		$pph			 = $this->input->post('pph');
+		$penanda		 = $this->input->post('penanda');
+		
+		$pemeriksa_1 	= $this->db->query("select pemeriksa_1 from tb_pejabat_ttd")->row()->pemeriksa_1;
+		$pemeriksa_2 	= $this->db->query("select pemeriksa_2 from tb_pejabat_ttd")->row()->pemeriksa_2;
+		$pemeriksa_3 	= $this->db->query("select pemeriksa_3 from tb_pejabat_ttd")->row()->pemeriksa_3;
+		$jabatan_1 		= $this->db->query("select jabatan_1 from tb_pejabat_ttd")->row()->jabatan_1;
+		$jabatan_2 		= $this->db->query("select jabatan_2 from tb_pejabat_ttd")->row()->jabatan_2;
+		$jabatan_3 		= $this->db->query("select jabatan_3 from tb_pejabat_ttd")->row()->jabatan_3;
+		
+		if ($uang_harian == "" or $uang_harian == NULL){$uang_harian=0;};
+		if ($uang_repres == "" or $uang_repres == NULL){$uang_repres=0;};
+		if ($uang_bbm == "" or $uang_bbm == NULL){$uang_bbm=0;};
+		if ($uang_tol == "" or $uang_tol == NULL){$uang_tol=0;};
+		if ($uang_hotel == "" or $uang_hotel == NULL){$uang_hotel=0;};
+		if ($upesawat_b == "" or $upesawat_b == NULL){$upesawat_b=0;};
+		if ($upesawat_p == "" or $upesawat_p == NULL){$upesawat_p=0;};
+		if ($ukereta_b == "" or $ukereta_b == NULL){$ukereta_b=0;};
+		if ($ukereta_p == "" or $ukereta_p == NULL){$ukereta_p=0;};
+		if ($utravel_b == "" or $utravel_b == NULL){$utravel_b=0;};
+		if ($utravel_p == "" or $utravel_p == NULL){$utravel_p=0;};
+		
+		
+		$chekskpd =  $this->db->get_where('tb_skpd',array($this->pk=>$id));
+		if($chekskpd->num_rows()>0){ //UPDATE
+			$checknomor =  $this->db->query("select count(no_skpd) as no_skpd from tb_skpd where (no_skpd ='$nomorskpd' or no_skpd = '$nomorskpd_old') and right(tgl_skpd,4) = '$year' ")->row()->no_skpd;		
+			if($checknomor > 1){			
+				echo '<script type="text/javascript">alert("Nomor SKPD Sudah Ada");window.history.go(-1);</script>';
+				exit;
+			} else {
+				
+			}
+		} else { //INSERT
+			$checknomor2 =  $this->db->query("select no_skpd from tb_skpd where no_skpd ='$nomorskpd' and right(tgl_skpd,4) = '$year' ");
+			if($checknomor2->num_rows()>0){
+				echo '<script type="text/javascript">alert("Nomor SKPD Sudah Ada");window.history.go(-1);</script>';
+				exit;
+			} else {
+				
+			}
+		}
+			
+				// PERHITUNGAN BBM =======================================================================================================
+				if ($jenis_biaya == "dalam_kota"){
+					$jumlah_km		 = 0;
+				} else {
+					$jumlah_km		 = $this->input->post('jumlah_km');
+				}
+				
+				if ($moda_angkutan=="kendaraan dinas"){
+					$harian_bbm		 = $this->db->query("select harian_bbm from tb_setting")->row()->harian_bbm;
+					$perkalian_bbm	 = $this->db->query("select perkalian_bbm from tb_setting")->row()->perkalian_bbm;
+					$harga_bbm		 = $this->db->query("select perliter from tb_bahanbakar where jenis_bbm = '$jenis_bbm'")->row()->perliter;	
+					
+					$hasil_km 		 = $jumlah_km * $perkalian_bbm;
+					$jml_harian_bbm  = $harian_bbm * $durasi;
+					//$jml_bbm		 = ($hasil_km+$jml_harian_bbm) * $harga_bbm;
+					$jml_bbm		 = $bbm_rp;
+					
+				} else {
+					$hasil_km 		 = 0;
+					$jml_harian_bbm  = 0;
+					//$jml_bbm		 = 0;
+					$jml_bbm		 = $bbm_rp;
+				}
+				
+				// =======================================================================================================================
+				$data = array();
+				for ($i = 0; $i < count($this->input->post('id_pelaksana')); $i++)
+				{
+					//echo $uang_repres[$i]. "<br/>";
+					//$jumlah 			= $uang_harian[$i]+$uang_hotel[$i]+$uang_repres[$i]+$uang_taxi[$i]+$upesawat_b[$i]+$ukereta_b[$i]+$utravel_b[$i];
+					$jumlah 			= $uang_harian[$i]+$uang_repres[$i]+$uang_taxi[$i];
+					$pajak 				= ($jumlah*$pph[$i])/100;
+					
+					//if ($jenis_biaya=="pswt_krywn_hotel" or $jenis_biaya=="pswt_krywn_non_hotel" or $jenis_biaya=="pswt_ka_waka_hotel" or $jenis_biaya=="pswt_ka_waka_non_hotel"){
+						$total		 	= $jumlah + $uang_hotel[$i]+$uang_bbm[$i]+$uang_tol[$i]+$upesawat_b[$i]+$ukereta_b[$i]+$utravel_b[$i]+$upesawat_p[$i]+$ukereta_p[$i]+$utravel_p[$i];
+						$jmlhditerima 	= $jumlah - $pajak +$uang_hotel[$i]+$uang_bbm[$i]+$uang_tol[$i]+$upesawat_b[$i]+$ukereta_b[$i]+$utravel_b[$i]+$upesawat_p[$i]+$ukereta_p[$i]+$utravel_p[$i];
+					/*
+					} else {
+						$total		 	= 0;
+						$jmlhditerima 	= $jumlah - $pajak ;
+					}
+					*/
+					
+					$data[$i] = array(
+						'id_pelaksana' 		=> $id_pelaksana[$i],
+						'uang_harian'  		=> $uang_harian[$i],
+						'uang_repres'  		=> $uang_repres[$i],
+						'uang_hotel'   		=> $uang_hotel[$i],
+						'uang_bbm'   		=> $uang_bbm[$i],
+						'uang_tol'   		=> $uang_tol[$i],
+						'uang_taxi'    		=> $uang_taxi[$i],
+						'uang_pesawat_b'   	=> $upesawat_b[$i],
+						'uang_pesawat_p'   	=> $upesawat_p[$i],
+						'uang_kereta_b'    	=> $ukereta_b[$i],
+						'uang_kereta_p'    	=> $ukereta_p[$i],
+						'uang_travel_b'    	=> $utravel_b[$i],
+						'uang_travel_p'    	=> $utravel_p[$i],
+						'pph'          		=> $pph[$i],
+						'jumlah'			=> $jumlah,
+						'potongan'			=> $pajak,
+						'total' 			=> $total,
+						'jumlah_diterima'	=> $jmlhditerima,
+						'penanda'			=> $penanda[$i],
+					);
+				}
+				//
+				//exit;
+				$this->db->update_batch('tb_pelaksana', $data, 'id_pelaksana'); 
+				
+				// AMBIL DATA PELAKSANA AKHIR UNTUK UPDATE BBM ===========================================================================
+				
+				//if ($moda_angkutan=="kendaraan dinas"){
+				
+					$last_id_pelaksana 	= $this->db->query("select max(id_pelaksana) as id_pelaksana from tb_pelaksana where id_sppd = '$id'")->row()->id_pelaksana;
+					
+					$last_pelaksana		= $this->db->query("select * from tb_pelaksana where id_pelaksana = '$last_id_pelaksana'")->result();
+					
+					foreach($last_pelaksana as $lp){
+						//$last_jumlah		= $lp->uang_harian+$jml_bbm+$lp->uang_repres+$lp->uang_hotel+$lp->uang_taxi+$lp->uang_pesawat_b+$lp->uang_travel_b+$lp->uang_kereta_b;
+						//$last_jumlah		= $lp->uang_harian+$lp->uang_repres+$lp->uang_hotel+$lp->uang_taxi+$lp->uang_pesawat_b+$lp->uang_travel_b+$lp->uang_kereta_b;
+						$last_jumlah		= $lp->uang_harian+$lp->uang_repres+$lp->uang_taxi;
+						$last_pajak			= ($last_jumlah*$lp->pph)/100;
+						//if ($jenis_biaya=="pswt_krywn_hotel" or $jenis_biaya=="pswt_krywn_non_hotel" or $jenis_biaya=="pswt_ka_waka_hotel" or $jenis_biaya=="pswt_ka_waka_non_hotel"){
+						$last_total			= $last_jumlah+$lp->uang_bbm+$lp->uang_tol+$lp->uang_hotel+$lp->uang_pesawat_b+$lp->uang_travel_b+$lp->uang_kereta_b+$lp->uang_pesawat_p+$lp->uang_travel_p+$lp->uang_kereta_p;
+						$last_jmlditerima 	= $last_jumlah - $last_pajak + $lp->uang_bbm +$lp->uang_tol +$lp->uang_hotel+$lp->uang_pesawat_b+$lp->uang_travel_b+$lp->uang_kereta_b+ $lp->uang_pesawat_p + $lp->uang_travel_p + $lp->uang_kereta_p;
+						//} else {
+							//$last_jmlditerima 	= $last_jumlah - $last_pajak;
+						//}
+						
+						$update_bbm = $this->db->query("UPDATE tb_pelaksana SET 
+														uang_harian='$lp->uang_harian', uang_repres='$lp->uang_repres', uang_bbm='$lp->uang_bbm',
+														uang_tol='$lp->uang_tol',
+														uang_hotel = '$lp->uang_hotel', uang_taxi='$lp->uang_taxi',
+														uang_pesawat_b = '$lp->uang_pesawat_b', uang_pesawat_p = '$lp->uang_pesawat_p',
+														uang_kereta_b = '$lp->uang_kereta_b', uang_kereta_p = '$lp->uang_kereta_p',
+														uang_travel_b = '$lp->uang_travel_b', uang_travel_p = '$lp->uang_travel_p',
+														jumlah='$last_jumlah', potongan='$last_pajak', 
+														jumlah_diterima='$last_jmlditerima', total='$last_total'
+														where id_pelaksana = '$last_id_pelaksana'");
+					}
+					$update_sts	 = $this->mcrud->manualquery('update tb_sppd set sts_edit = 0 WHERE id_sppd ="'.$id.'"');
+					
+				//}
+				
+				// =======================================================================================================================
+				
+				// AMBIL DATA NOMOR SKPD =================================================================================================
+				$last_no_skpd 	 = $this->db->query("select max(no_skpd) as no_skpd from tb_skpd")->row()->no_skpd;
+				
+				if($last_no_skpd == NULL or $last_no_skpd == 0) {
+					$no_skpd = 1;
+				} else {
+					$no_skpd = $last_no_skpd + 1;
+				}
+				// =======================================================================================================================
+				
+				// INSERT TABLE SKPD & UPDATE STATUS SPPD ================================================================================
+				$chekskpd =  $this->db->get_where('tb_skpd',array($this->pk=>$id));
+				if($chekskpd->num_rows()>0){
+					$this->mcrud->manualQuery('UPDATE tb_skpd set tgl_skpd="'.$time_now.'", attr_skpd="'.$attr_skpd.'", no_skpd="'.$nomorskpd.'", jenis_biaya="'.$jenis_biaya.'", angkutan="'.$moda_angkutan.'", dasar="'.$dasar.'",
+										   perlengkapan="'.$perlengkapan.'", ket_lain="'.$ket_lain.'", jarak="'.$jumlah_km.'", hasil_km="'.$hasil_km.'",
+										   jenis_bbm="'.$jenis_bbm.'", harga_bbm="'.$harga_bbm.'", harian_bbm="'.$jml_harian_bbm.'", jml_bbm="'.$jml_bbm.'",
+										   ket_lain_skpd="'.$ket_lain_skpd.'"
+										   where id_sppd = "'.$id.'"
+										 ');
+					$this->db->query("DELETE FROM tb_pelaksana_temp");
+				}
+				else {
+					
+					$this->mcrud->manualQuery('INSERT INTO tb_skpd (
+										   no_skpd, tgl_skpd, attr_skpd, jenis_biaya, id_sppd, angkutan, dasar, perlengkapan, ket_lain, jarak,
+										   hasil_km, jenis_bbm, harga_bbm, harian_bbm, jml_bbm, sts_skpd, 
+										   pemeriksa_1, jabatan_1, pemeriksa_2, jabatan_2, pemeriksa_3, jabatan_3, ket_lain_skpd) 
+										   values (
+										   "'.$nomorskpd.'","'.$time_now.'","'.$attr_skpd.'","'.$jenis_biaya.'","'.$id.'","'.$moda_angkutan.'","'.$dasar.'",
+										   "'.$perlengkapan.'","'.$ket_lain.'","'.$jumlah_km.'","'.$hasil_km.'","'.$jenis_bbm.'","'.$harga_bbm.'",
+										   "'.$jml_harian_bbm.'","'.$jml_bbm.'","1",
+										   "'.$pemeriksa_1.'","'.$jabatan_1.'","'.$pemeriksa_2.'","'.$jabatan_2.'","'.$pemeriksa_3.'","'.$jabatan_3.'","'.$ket_lain_skpd.'")');
+										   
+					$this->db->query("UPDATE tb_sppd SET sts='1' where id_sppd = '$id'");
+					$this->db->query("DELETE FROM tb_pelaksana_temp");
+				}	
+				
+				
+				// =======================================================================================================================
+				redirect('skpd');
+			
+		
+    }
+    
+    function reject()
+    {
+        $id     		 =  $this->uri->segment(3);
+        
+		$update_sts		 = $this->db->query("UPDATE tb_sppd SET sts='2' where id_sppd = '$id'");
+        redirect($this->uri->segment(1));
+    }
+	
+	function lihat_pelaksana()
+    {
+		$data['title']  = $this->title;
+		$data['desc']   = "";
+		$id             = $this->uri->segment(3);
+		$query			=  "select 
+							id_pelaksana, nama_pelaksana, noreg, gol, jabatan, unit_kerja, status_pelaksana
+							from tb_pelaksana 
+							where id_sppd = '$id'
+							ORDER BY status_pelaksana DESC";
+		$data['record'] = $this->db->query($query)->result();
+		$this->template->load('template', $this->folder.'/lihat_pelaksana',$data);
+    }
+	
+}
