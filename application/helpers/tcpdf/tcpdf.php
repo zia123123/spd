@@ -16539,8 +16539,10 @@ class TCPDF {
 					// get attributes
 					preg_match_all('/([^=\s]*)[\s]*=[\s]*"([^"]*)"/', $element, $attr_array, PREG_PATTERN_ORDER);
 					$dom[$key]['attribute'] = array(); // reset attribute array
-					foreach ($attr_array[1] as $id => $name) {
+					 while (($id = key($attr_array[1])) !== null) {
+						$name = current($attr_array[1]);
 						$dom[$key]['attribute'][strtolower($name)] = $attr_array[2][$id];
+						next($attr_array[1]);
 					}
 					if (!empty($css)) {
 						// merge CSS style to current style
